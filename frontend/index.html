@@ -1037,58 +1037,79 @@
         .filter((w) => w.length > 2);
     }
 
-    checkATSBtn.addEventListener("click", () => {
-      const jdText = jobDescriptionInput.value.trim();
-      const resumeText = resumeTextForATSInput.value.trim();
+    checkATSBtn.addEventListener("click", async () => {
+  const jdText = jobDescriptionInput.value.trim();
+  const resumeText = resumeTextForATSInput.value.trim();
 
-      if (!jdText || !resumeText) {
-        alert("Please paste both a job description and resume text first.");
-        return;
-      }
+  if (!jdText || !resumeText) {
+    alert("Please paste both a job description and resume text first.");
+    return;
+  }
 
-      const jdTokens = tokenize(jdText);
-      const resumeTokens = new Set(tokenize(resumeText));
+  atsScoreValue.textContent = "…";
+  atsScoreChip.textContent = "Checking…";
+  atsScoreHelp.textContent = "Sending your data to the local ATS backend for analysis.";
 
-      if (!jdTokens.length) {
-        alert("Job description is too short to analyse.");
-        return;
-      }
-
-      const uniqueJDWords = Array.from(new Set(jdTokens));
-      const uniqueMatches = uniqueJDWords.filter((w) =>
-        resumeTokens.has(w)
-      );
-
-      const rawScore =
-        (uniqueMatches.length / uniqueJDWords.length) * 100;
-      const score = Math.round(rawScore);
-
-      atsScoreValue.textContent = score + "%";
-
-      let levelText = "";
-
-      if (score >= 75) {
-        levelText = "Strong match";
-        atsScoreChip.style.borderColor = "rgba(74, 222, 128, 0.8)";
-        atsScoreChip.style.background = "rgba(22, 163, 74, 0.16)";
-        atsScoreChip.style.color = "#14532d";
-      } else if (score >= 50) {
-        levelText = "Okay match";
-        atsScoreChip.style.borderColor = "rgba(234, 179, 8, 0.8)";
-        atsScoreChip.style.background = "rgba(234, 179, 8, 0.12)";
-        atsScoreChip.style.color = "#713f12";
-      } else {
-        levelText = "Weak match";
-        atsScoreChip.style.borderColor = "rgba(239, 68, 68, 0.8)";
-        atsScoreChip.style.background = "rgba(153, 27, 27, 0.16)";
-        atsScoreChip.style.color = "#7f1d1d";
-      }
-
-      atsScoreChip.textContent = levelText;
-
-      atsScoreHelp.textContent =
-        "Score is based on keyword overlap only. In your final project, this can be replaced with a proper ATS algorithm in the backend.";
+  try {
+    const response = await fetch("http://127.0.0.1:8000/ats-score", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        job_description: jdText,
+        resume_text: resumeText,
+      }),
     });
+
+    if (!response.ok) {
+      throw new Error("Server error: " + response.status);
+    }
+
+    const data = await response.json();
+    const score = data.score ?? 0;
+
+    atsScoreValue.textContent = score + "%";
+
+    let levelText = "";
+
+    if (score >= 75) {
+      levelText = "Strong match";
+      atsScoreChip.style.borderColor = "rgba(74, 222, 128, 0.8)";
+      atsScoreChip.style.background = "rgba(22, 163, 74, 0.16)";
+      atsScoreChip.style.color = "#14532d";
+    } else if (score >= 50) {
+      levelText = "Okay match";
+      atsScoreChip.style.borderColor = "rgba(234, 179, 8, 0.8)";
+      atsScoreChip.style.background = "rgba(234, 179, 8, 0.12)";
+      atsScoreChip.style.color = "#713f12";
+    } else {
+      levelText = "Weak match";
+      atsScoreChip.style.borderColor = "rgba(239, 68, 68, 0.8)";
+      atsScoreChip.style.background = "rgba(153, 27, 27, 0.16)";
+      atsScoreChip.style.color = "#7f1d1d";
+    }
+
+    atsScoreChip.textContent = levelText;
+
+    const matched = data.matched_keywords || [];
+    const missing = data.missing_keywords || [];
+
+    atsScoreHelp.textContent =
+      `Matched ${matched.length} keywords, missing ${missing.length}. ` +
+      `Examples matched: ${matched.slice(0, 5).join(", ") || "none"}.`;
+  } catch (err) {
+    console.error(err);
+    atsScoreValue.textContent = "–";
+    atsScoreChip.textContent = "Error";
+    atsScoreChip.style.borderColor = "rgba(239, 68, 68, 0.8)";
+    atsScoreChip.style.background = "rgba(153, 27, 27, 0.16)";
+    atsScoreChip.style.color = "#fecaca";
+    atsScoreHelp.textContent =
+      "Could not reach the ATS backend. Make sure the FastAPI server is running on http://127.0.0.1:8000.";
+  }
+});
+
 
     // THEME TOGGLE
     const themeToggle = document.getElementById("themeToggle");
